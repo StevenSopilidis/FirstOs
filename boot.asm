@@ -17,8 +17,23 @@ TestDiskExtension: ; test if LBA addressing is available
     cmp bx, 0xaa55; if bx != 0xaa55 disk extension is not supported
     jne NotSupported
 
+LoadLoader:
+    mov si, ReadPacket ; source index of struct to be used in order to load the loader
+    mov word[si], 0x10 ; size of struct
+    mov word[si + 2], 5; number of sectors
+    mov word[si + 4], 0x7e00 ; offset, mem location in which loader will be loaded
+    mov word[si + 6], 0 ; segment, value of segment part of address
+    mov dword[si + 8], 1 ; address lo, LBA address of starting sector (0 is the MBR so we load from 1 and so on)
+    mov dword[si + 12], 0 ; address hi 
+    mov dl, [DriveId] ; device to load from
+    mov ah, 0x42 ; indicate using disk extension service
+    int 0x13
+    jc ReadError ; if sector reading failed
+    mov dl, [DriveId] ; save drive id which will be used to load the kernel 
+    jmp 0x7e00 ; jump to loader
 
-PrintMessage:
+ReadError:
+NotSupported:
     mov ah, 0x13 ; function code for bios interupt
     mov al, 1 ; specify the cursor to be at the end of the string
     mov bx, 0xa
@@ -27,14 +42,14 @@ PrintMessage:
     mov cx, MessageLen
     int 0x10
 
-NotSupported:
 End:
     hlt
     jmp End
 
 DriveId: db 0
-Message: db "Disk Extension Is Supported"
+Message: db "We have an error in boot process"
 MessageLen: equ $-Message
+ReadPacket: times 16 db 0 ; for reading  the loader
 
 ;define first partition
 times (0x1be - ($ - $$)) db 0 ; fill the boot sector until 0x1be where partion entries reside with zeros
