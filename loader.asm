@@ -60,6 +60,7 @@ TestA20:
     cmp word[es:0x7c10],0xb200
     je End
     
+
 SetA20LineDone:
     xor ax,ax
     mov es,ax
@@ -102,6 +103,7 @@ PMEntry:
     mov dword[0x70000],0x71007
     mov dword[0x71000],10000111b
 
+
     lgdt [Gdt64Ptr]
 
     mov eax,cr4
@@ -130,9 +132,14 @@ PEnd:
 LMEntry:
     mov rsp,0x7c00
 
-    mov byte[0xb8000],'L'
-    mov byte[0xb8001],0xa
+    cld
+    mov rdi,0x200000
+    mov rsi,0x10000
+    mov rcx,51200/8
+    rep movsq
 
+    jmp 0x200000
+    
 LEnd:
     hlt
     jmp LEnd
