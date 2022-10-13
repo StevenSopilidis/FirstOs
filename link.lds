@@ -3,9 +3,10 @@ ENTRY(start)
 
 SECTIONS
 {
-    . = 0x200000;
+    . = 0xffff800000200000;
+	
     .text : {
-        *(.text) /* copy .section_type sections of files to .section_type section of linkers output file*/
+        *(.text)
     }
 
     .rodata : {
@@ -20,4 +21,6 @@ SECTIONS
     .bss : {
         *(.bss)
     }
+    
+    PROVIDE(end = .);
 }

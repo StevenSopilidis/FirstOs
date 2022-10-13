@@ -1,9 +1,10 @@
 #include "trap.h"
 #include "print.h"
-#include "debug.h"
+#include "memory.h"
 
-// called by assembly code
-void KMain(void) {
-    init_idt();
-    ASSERT(0);
+void KMain(void)
+{ 
+   init_idt();
+   init_memory();  
+   init_kvm();
 }

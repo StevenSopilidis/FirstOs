@@ -24,6 +24,7 @@ global vector39
 global eoi
 global read_isr
 global load_idt
+global load_cr3
 
 Trap:
     push rax
@@ -42,10 +43,7 @@ Trap:
     push r14
     push r15
 
-    inc byte[0xb8010]
-    mov byte[0xb8011],0xe
-
-    mov rdi,rsp ; push  rsp as parameter to handler
+    mov rdi,rsp
     call handler
 
 TrapReturn:
@@ -65,14 +63,14 @@ TrapReturn:
     pop	rbx
     pop	rax       
 
-    add rsp,16 ; move by 16 for the errror code and vector index that we pushed
+    add rsp,16
     iretq
 
 
 
 vector0:
-    push 0 ; errror code push it or will be pushed automatically by the cpu in down  vectors
-    push 0 ; index of vector
+    push 0
+    push 0
     jmp Trap
 
 vector1:
@@ -176,6 +174,11 @@ read_isr:
 
 load_idt:
     lidt [rdi]
+    ret
+
+load_cr3:
+    mov rax,rdi
+    mov cr3,rax
     ret
 
 
