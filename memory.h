@@ -24,18 +24,29 @@ typedef uint64_t PDE;
 typedef PDE* PD;
 typedef PD* PDPTR;
 
-#define PTE_P 1
-#define PTE_W 2
-#define PTE_U 4
+// P,W,U attributes in paging tables
+#define PTE_P 1 // present
+#define PTE_W 2 // writable
+#define PTE_U 4 // accessible by user applications
 #define PTE_ENTRY 0x80
 #define KERNEL_BASE 0xffff800000000000
 #define PAGE_SIZE (2*1024*1024)
 
+// allign address to next 2mb boundry if not alligned
 #define PA_UP(v) ((((uint64_t)v + PAGE_SIZE-1) >> 21) << 21)
+// allign address to previous 2mb boundry
 #define PA_DOWN(v) (((uint64_t)v >> 21) << 21)
+// convert physical address to virtaul address
+// by adding kernel base virtual address
 #define P2V(p) ((uint64_t)(p) + KERNEL_BASE)
+// convert virtual address to physical address
+// by subtracting kernel base virtual address
 #define V2P(v) ((uint64_t)(v) - KERNEL_BASE)
+// retrives address of next level page
+// clear lower 12 bits of PML4 or PDPT or PDT to do so
 #define PDE_ADDR(p) (((uint64_t)p >> 12) << 12)
+// retrives address of next level physical page
+// clear lower 21 bits of Page table entry to do so
 #define PTE_ADDR(p) (((uint64_t)p >> 21) << 21)
 
 void* kalloc(void);

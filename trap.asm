@@ -1,5 +1,5 @@
-
 section .text
+
 extern handler
 global vector0
 global vector1
@@ -21,10 +21,15 @@ global vector18
 global vector19
 global vector32
 global vector39
+global sysint
 global eoi
 global read_isr
 global load_idt
 global load_cr3
+global pstart
+global read_cr2
+global swap
+global TrapReturn
 
 Trap:
     push rax
@@ -63,7 +68,7 @@ TrapReturn:
     pop	rbx
     pop	rax       
 
-    add rsp,16
+    add rsp, 16 ; skip trap number and error code
     iretq
 
 
@@ -161,6 +166,12 @@ vector39:
     push 39
     jmp Trap
 
+sysint:
+    push 0 ; errorcode (since we dont use it we push 0)
+    push 0x80 ; vector number
+    jmp Trap
+
+
 eoi:
     mov al,0x20
     out 0x20,al
@@ -181,4 +192,31 @@ load_cr3:
     mov cr3,rax
     ret
 
+read_cr2:
+    mov rax, cr2
+    ret
 
+pstart:
+    mov rsp, rdi
+    jmp TrapReturn
+
+swap:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    
+    ; changes kernel stack pointer between processes
+    mov [rdi],rsp ; rdi (the address of the context field in process)
+    mov rsp,rsi ; rsi (the context value in the next process)
+    
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    
+    ret 

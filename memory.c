@@ -8,9 +8,9 @@
 static void free_region(uint64_t v, uint64_t e);
 
 static struct FreeMemRegion free_mem_region[50];
-static struct Page free_memory;
-static uint64_t memory_end;
-extern char end;
+static struct Page free_memory; // head of linked list that will hold the free for use 2MB pages
+static uint64_t memory_end; // end address of free memory get it from pages we 2MB pages we createad
+extern char end; // address of end of kernel
 
 void init_memory(void)
 {
@@ -21,6 +21,7 @@ void init_memory(void)
 
     ASSERT(count <= 50);
 
+    // collect all free memory regions
 	for(int32_t i = 0; i < count; i++) {        
         if(mem_map[i].type == 1) {			
             free_mem_region[free_region_count].address = mem_map[i].address;
@@ -31,25 +32,34 @@ void init_memory(void)
         printk("%x  %uKB  %u\n",mem_map[i].address,mem_map[i].length/1024,(uint64_t)mem_map[i].type);
 	}
 
-    for (int i = 0; i < free_region_count; i++) {                  
+    // loop through all the free regions and split them to
+    // 2MB pages
+    for (int i = 0; i < free_region_count; i++) {    
+        //  start of free memory region in virtual address              
         uint64_t vstart = P2V(free_mem_region[i].address);
+        //  end of free memory region in virtual address
         uint64_t vend = vstart + free_mem_region[i].length;
 
-        if (vstart > (uint64_t)&end) {
+        if (vstart > (uint64_t)&end) { // if free memory starts after kernel
             free_region(vstart, vend);
         } 
-        else if (vend > (uint64_t)&end) {
+        else if (vend > (uint64_t)&end) { // else if end of memory is after end of kernel
             free_region((uint64_t)&end, vend);
-        }       
+        }  // else free memory region is withing kernel thus we ignore it 
     }
     
     memory_end = (uint64_t)free_memory.next+PAGE_SIZE;   
     printk("%x\n",memory_end);
 }
 
+// devides region from v .... v + region_length into 
+// 2 MB pages
+// @param v: start of region
+// @param e: end of region
 static void free_region(uint64_t v, uint64_t e)
 {
-    for (uint64_t start = PA_UP(v); start+PAGE_SIZE <= e; start += PAGE_SIZE) {        
+    for (uint64_t start = PA_UP(v); start+PAGE_SIZE <= e; start += PAGE_SIZE) {
+        // 0xffff800040000000 = 0xffff800000000000(kernel base)+ 1GB(our os uses 1GB or memory)         
         if (start+PAGE_SIZE <= 0xffff800040000000) {            
            kfree(start);
         }
@@ -58,15 +68,17 @@ static void free_region(uint64_t v, uint64_t e)
 
 void kfree(uint64_t v)
 {
-    ASSERT(v % PAGE_SIZE == 0);
-    ASSERT(v >= (uint64_t) & end);
-    ASSERT(v+PAGE_SIZE <= 0xffff800040000000);
-
+    ASSERT(v % PAGE_SIZE == 0); // check if we are page allgined
+    ASSERT(v >= (uint64_t) & end); // check region not withing kernel
+    ASSERT(v+PAGE_SIZE <= 0xffff800040000000); // check page will not surpass 1GB ram 
+    // add 2MB page in the beggining of the linked list
     struct Page *page_address = (struct Page*)v;
     page_address->next = free_memory.next;
     free_memory.next = page_address;
 }
 
+// method for allocating one of the available 2MB pages and
+// returning it to the caller
 void* kalloc(void)
 {
     struct Page *page_address = free_memory.next;
@@ -79,9 +91,11 @@ void* kalloc(void)
         free_memory.next = page_address->next;            
     }
     
-    return page_address;
+    return (void *)page_address;
 }
 
+// method to find pml4 entry based on the 
+// provided virtual address
 static PDPTR find_pml4t_entry(uint64_t map, uint64_t v, int alloc, uint32_t attribute)
 {
     PDPTR *map_entry = (PDPTR*)map;
@@ -102,6 +116,11 @@ static PDPTR find_pml4t_entry(uint64_t map, uint64_t v, int alloc, uint32_t attr
     return pdptr;    
 }
 
+// find the entry of the page directory pointer table
+// based on the virtual address provided
+// map -> pml4 table
+// v -> virtual adress
+// alloc -> indicates wether or not to allocate new page if it does not exist
 static PD find_pdpt_entry(uint64_t map, uint64_t v, int alloc, uint32_t attribute)
 {
     PDPTR pdptr = NULL;
@@ -126,6 +145,11 @@ static PD find_pdpt_entry(uint64_t map, uint64_t v, int alloc, uint32_t attribut
     return pd;
 }
 
+// map -> pml4 table
+// v -> start (virtual address)
+// e -> end (virtual address)
+// pa -> physical address to map into
+// mapp address to physical page
 bool map_pages(uint64_t map, uint64_t v, uint64_t e, uint64_t pa, uint32_t attribute)
 {
     uint64_t vstart = PA_DOWN(v);
@@ -135,7 +159,7 @@ bool map_pages(uint64_t map, uint64_t v, uint64_t e, uint64_t pa, uint32_t attri
 
     ASSERT(v < e);
     ASSERT(pa % PAGE_SIZE == 0);
-    ASSERT(pa+vend-vstart <= 1024*1024*1024);
+    ASSERT(pa+vend-vstart <= 1024*1024*1024); // make sure that end of physical address is inside 1 GB memory
 
     do {
         pd = find_pdpt_entry(map, vstart, 1, attribute);    
@@ -143,8 +167,8 @@ bool map_pages(uint64_t map, uint64_t v, uint64_t e, uint64_t pa, uint32_t attri
             return false;
         }
 
-        index = (vstart >> 21) & 0x1FF;
-        ASSERT(((uint64_t)pd[index] & PTE_P) == 0);
+        index = (vstart >> 21) & 0x1FF; 
+        ASSERT(((uint64_t)pd[index] & PTE_P) == 0); // check if we remap to used page (not allowed in our system)
 
         pd[index] = (PDE)(pa | attribute | PTE_ENTRY);
 
@@ -155,17 +179,19 @@ bool map_pages(uint64_t map, uint64_t v, uint64_t e, uint64_t pa, uint32_t attri
     return true;
 }
 
+// to load cr3 with new translation table
 void switch_vm(uint64_t map)
 {
     load_cr3(V2P(map));   
 }
 
+// remaps kernel using 2MB pages
 uint64_t setup_kvm(void)
 {
     uint64_t page_map = (uint64_t)kalloc();
 
     if (page_map != 0) {
-        memset((void*)page_map, 0, PAGE_SIZE);        
+        memset((void*)page_map, 0, PAGE_SIZE);
         if (!map_pages(page_map, KERNEL_BASE, memory_end, V2P(KERNEL_BASE), PTE_P|PTE_W)) {
             free_vm(page_map);
             page_map = 0;
@@ -179,9 +205,15 @@ void init_kvm(void)
     uint64_t page_map = setup_kvm();
     ASSERT(page_map != 0);
     switch_vm(page_map);
-    printk("memory manager is working now");
+    printk("memory manager is working now\n");
 }
 
+// to run the program we will allocate page
+// map page to base virtual address 0x400000 and then copy
+// data & code of program to it
+// map: address of pml4
+// start: location of program
+// size: size of data we need to copy 
 bool setup_uvm(uint64_t map, uint64_t start, int size)
 {
     bool status = false;
@@ -202,7 +234,7 @@ bool setup_uvm(uint64_t map, uint64_t start, int size)
     return status;
 }
 
-void free_pages(uint64_t map, uint64_t vstart, uint64_t vend)
+void free_page(uint64_t map, uint64_t vstart, uint64_t vend)
 {
     unsigned int index; 
 
@@ -261,7 +293,7 @@ static void free_pml4t(uint64_t map)
 
 void free_vm(uint64_t map)
 {   
-    free_pages(map, 0x400000, 0x400000+PAGE_SIZE);
+    free_page(map, 0x400000, 0x400000+PAGE_SIZE);
     free_pdt(map);
     free_pdpt(map);
     free_pml4t(map);

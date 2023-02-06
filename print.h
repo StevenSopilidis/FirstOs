@@ -9,6 +9,7 @@ struct ScreenBuffer {
     int row;
 };
 
+void write_screen(const char *buffer, int size, char color);
 int printk(const char *format, ...);
 
 #endif

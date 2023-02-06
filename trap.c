@@ -1,7 +1,11 @@
 #include "trap.h"
+#include "print.h"
+#include "syscall.h"
+#include "process.h"
 
 static struct IdtPtr idt_pointer;
 static struct IdtEntry vectors[256];
+static uint64_t ticks;
 
 static void init_idt_entry(struct IdtEntry *entry, uint64_t addr, uint8_t attribute)
 {
@@ -34,10 +38,23 @@ void init_idt(void)
     init_idt_entry(&vectors[19],(uint64_t)vector19,0x8e);
     init_idt_entry(&vectors[32],(uint64_t)vector32,0x8e);
     init_idt_entry(&vectors[39],(uint64_t)vector39,0x8e);
+    // for syscalls (0xee -> so interupt is accessible through ring 3)
+    init_idt_entry(&vectors[0x80], (uint64_t)sysint, 0xee);
 
     idt_pointer.limit = sizeof(vectors)-1;
     idt_pointer.addr = (uint64_t)vectors;
     load_idt(&idt_pointer);
+}
+
+uint64_t get_ticks(void)
+{
+    return ticks;
+}
+
+static void timer_handler(void)
+{
+    ticks++;
+    wake_up(-1);
 }
 
 void handler(struct TrapFrame *tf)
@@ -46,6 +63,7 @@ void handler(struct TrapFrame *tf)
 
     switch (tf->trapno) {
         case 32:
+            timer_handler();
             eoi();
             break;
             
@@ -55,8 +73,29 @@ void handler(struct TrapFrame *tf)
                 eoi();
             }
             break;
-
+        case 0x80:
+            system_call(tf);
+            break;
         default:
-            while (1) { }
+            // lower 3 bits of cs register hold 
+            // ring level so we can check if the exception was 
+            // generated at user mode
+            if (tf->cs & 3) {
+                // kill function that caused
+                // exception
+                printk("Exception is %d\n", tf->trapno);
+                exit(); 
+            } else {  
+                // exception was genereted
+                // at kernel mode thus hult system
+                while (1) {}
+                
+            }
+            //cr2 has the virtual address that we tried to access and caused error
+            // printk("[Error %d at ring %d] %d:%x %x", tf->trapno, tf->cs & 3, tf->errorcode,read_cr2(), tf->rip);
+    }
+    // timer interupt, need to context switch
+    if(tf->trapno == 32) {
+        yield();
     }
 }
