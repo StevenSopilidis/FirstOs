@@ -11,11 +11,12 @@ static struct FreeMemRegion free_mem_region[50];
 static struct Page free_memory; // head of linked list that will hold the free for use 2MB pages
 static uint64_t memory_end; // end address of free memory get it from pages we 2MB pages we createad
 extern char end; // address of end of kernel
+static int64_t total_mem; // total mem of system
 
 void init_memory(void)
 {
     int32_t count = *(int32_t*)0x9000;
-    uint64_t total_mem = 0;
+    total_mem = 0;
     struct E820 *mem_map = (struct E820*)0x9008;	
     int free_region_count = 0;
 
@@ -50,6 +51,11 @@ void init_memory(void)
     
     memory_end = (uint64_t)free_memory.next+PAGE_SIZE;   
     printk("%x\n",memory_end);
+}
+
+// returns total mem in MB format
+uint64_t get_total_memory(void) {
+    return total_mem/1024/1024;
 }
 
 // devides region from v .... v + region_length into 

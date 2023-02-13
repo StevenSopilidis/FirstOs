@@ -4,6 +4,8 @@ global writeu
 global sleepu
 global waitu
 global exitu
+global keyboard_readu 
+global get_total_memoryu
 
 writeu:
     sub rsp, 16 ; allocate 16 bytes for paraters buffer and buffer_size
@@ -41,5 +43,19 @@ exitu: ; has no parameters passed
     mov eax, 3 ; index number of exit sys call in kernel
     mov rdi, 0 ; no parameters passed
 
+    int 0x80
+    ret
+
+keyboard_readu: ; has no parameters
+    mov eax, 4
+    xor edi, edi
+    
+    int 0x80
+    ret
+
+get_total_memoryu: ; no parameters
+    mov eax, 5
+    xor edi, edi
+    
     int 0x80
     ret

@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "stddef.h"
 #include "process.h"
+#include "keyboard.h"
 
 // system call functions in our system
 static SYSTEMCALL system_calls[10];
@@ -42,14 +43,25 @@ static int sys_exit(int64_t* argptr)
     return 0;
 }
 
+// wait system call method
+// argptr -> user data on stack that was pushed
 static int sys_wait(int64_t* argptr) 
 {
     wait();
     return 0;
 }
 
-// wait system call method
-// argptr -> user data on stack that was pushed
+// read key from buffer system call
+static int sys_keyboard_read(uint64_t *argptr)
+{
+    return read_key_buffer();
+}
+
+// get total mem system call
+static int sys_get_total_memory(int64_t *argptr)
+{
+    return get_total_memory();
+}
 
 
 // function to initialize system calls
@@ -59,6 +71,8 @@ void init_system_call(void)
     system_calls[1] = sys_sleep;
     system_calls[2] = sys_wait;
     system_calls[3] = sys_exit;
+    system_calls[4] = sys_keyboard_read;
+    system_calls[5] = sys_get_total_memory;
 }
 
 // functio that detects which system call method 
@@ -75,7 +89,7 @@ void system_call(struct TrapFrame* tf)
     int64_t param_count = tf->rdi;
     int64_t *argptr = (int64_t)tf->rsi;
 
-    if(param_count < 0 || i > 3 || i <0) {
+    if(param_count < 0 || i > 5 || i <0) {
         tf->rax = -1;
         return;
     }
